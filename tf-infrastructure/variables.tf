@@ -15,3 +15,9 @@ variable "openstack_endpoint_type" {
   description = "OpenStack endpoint type"
   default     = "public"
 }
+
+variable "openstack_disable_ssl_certificate_validation" {
+  type        = bool
+  description = "Disable SSL certificate validation, recommended for microstack"
+  default     = true
+}
