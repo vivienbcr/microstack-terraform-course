@@ -20,3 +20,8 @@ variable "openstack_disable_ssl_certificate_validation" {
   description = "Disable SSL certificate validation, recommended for microstack"
   default     = true
 }
+
+variable "ssh_public_key" {
+  type        = string
+  description = "SSH public key"
+}
