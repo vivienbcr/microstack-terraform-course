@@ -1,7 +1,6 @@
 variable "openstack_auth_url" {
   type        = string
   description = "OpenStack authentication URL"
-  default     = "https://your-openstack-url/auth"
 }
 
 variable "openstack_region" {
