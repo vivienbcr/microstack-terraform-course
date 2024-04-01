@@ -11,6 +11,39 @@ resource "openstack_compute_keypair_v2" "ssh_keypair" {
 }
 
 /**
+* Template cloud init file
+*/
+
+data "template_file" "script" {
+  template = file("${path.module}/init.tftpl")
+
+  vars = {
+    user       = var.vm_user
+    public_key = var.ssh_public_key
+  }
+}
+
+data "template_cloudinit_config" "cloudinit" {
+  gzip          = true
+  base64_encode = true
+
+  part {
+    filename     = "init.cfg"
+    content_type = "text/cloud-config"
+    content      = data.template_file.script.rendered
+  }
+}
+
+resource "local_file" "cloudinit" {
+  content  = data.template_file.script.rendered
+  filename = "${path.module}/cloudinit-render-preview.cfg"
+}
+
+
+
+
+
+/**
 * Create security group for vms
 * This security group is the same as the default security (for IPV4) group in OpenStack
 * Egress accepts all traffic rules are by default https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/resources/networking_secgroup_v2#delete_default_rules
@@ -63,7 +96,7 @@ resource "openstack_compute_instance_v2" "vm_1" {
   flavor_id       = "2"
   key_pair        = openstack_compute_keypair_v2.ssh_keypair.name
   security_groups = []
-
+  user_data       = data.template_cloudinit_config.cloudinit.rendered
   metadata = {
     this = "that"
   }

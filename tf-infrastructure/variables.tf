@@ -11,3 +11,9 @@ variable "ssh_public_key" {
   type        = string
   description = "SSH public key"
 }
+
+variable "vm_user" {
+  type        = string
+  description = "User to create on the VM"
+  default     = "debian"
+}

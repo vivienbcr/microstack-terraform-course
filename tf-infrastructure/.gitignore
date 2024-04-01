@@ -1,3 +1,4 @@
+cloudinit-render-preview.cfg
 # Only for this course, ignore .terraform.lock.hcl
 .terraform.lock.hcl
 
