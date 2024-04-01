@@ -1,24 +1,10 @@
-variable "openstack_auth_url" {
-  type        = string
-  description = "OpenStack authentication URL"
-}
-
-variable "openstack_region" {
-  type        = string
-  description = "OpenStack region"
-  default     = "microstack"
-}
-
-variable "openstack_endpoint_type" {
-  type        = string
-  description = "OpenStack endpoint type"
-  default     = "public"
-}
-
-variable "openstack_disable_ssl_certificate_validation" {
-  type        = bool
-  description = "Disable SSL certificate validation, recommended for microstack"
-  default     = true
+variable "os_provider" {
+  type = object({
+    auth_url      = string
+    region        = optional(string, "microstack")
+    endpoint_type = optional(string, "public")
+    insecure      = optional(bool, true)
+  })
 }
 
 variable "ssh_public_key" {

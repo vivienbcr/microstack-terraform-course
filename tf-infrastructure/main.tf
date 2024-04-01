@@ -1,8 +1,8 @@
 provider "openstack" {
-  auth_url      = var.openstack_auth_url
-  region        = var.openstack_region
-  endpoint_type = var.openstack_endpoint_type
-  insecure      = var.openstack_disable_ssl_certificate_validation
+  auth_url      = var.os_provider.auth_url
+  region        = var.os_provider.region
+  endpoint_type = var.os_provider.endpoint_type
+  insecure      = var.os_provider.insecure
 }
 
 resource "openstack_compute_keypair_v2" "ssh_keypair" {
