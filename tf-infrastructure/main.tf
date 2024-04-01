@@ -11,14 +11,44 @@ resource "openstack_compute_keypair_v2" "ssh_keypair" {
 }
 
 /**
+* Create security group for vms
+* This security group is the same as the default security (for IPV4) group in OpenStack
+* Egress accepts all traffic rules are by default https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/resources/networking_secgroup_v2#delete_default_rules
+*/
+resource "openstack_networking_secgroup_v2" "vm_external_secgroup" {
+  name        = "vm_external_secgroup"
+  description = "Allow ICMP and SSH"
+
+}
+resource "openstack_networking_secgroup_rule_v2" "ext_ssh_in" {
+  direction         = "ingress"
+  description       = "Allow SSH access"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = openstack_networking_secgroup_v2.vm_external_secgroup.id
+}
+resource "openstack_networking_secgroup_rule_v2" "ext_ping_in" {
+  direction         = "ingress"
+  description       = "Allow ICMP access"
+  ethertype         = "IPv4"
+  protocol          = "icmp"
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = openstack_networking_secgroup_v2.vm_external_secgroup.id
+}
+
+
+/**
 * Create port for vm_1
 */
 resource "openstack_networking_port_v2" "port_vm_1" {
   name                  = "port_vm_1"
   network_id            = "712dc2bd-46e4-4912-a912-26660544cca6"
   admin_state_up        = "true"
-  no_security_groups    = "true"
-  port_security_enabled = "false"
+  security_group_ids    = [openstack_networking_secgroup_v2.vm_external_secgroup.id]
+  port_security_enabled = "true"
 
   fixed_ip {
     subnet_id = "35525fef-80b3-4b15-a4fc-e4347bef5a7f"
