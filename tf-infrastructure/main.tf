@@ -74,35 +74,134 @@ resource "openstack_networking_secgroup_rule_v2" "ext_ping_in" {
 
 
 /**
+* Get external network 
+*/
+data "openstack_networking_network_v2" "external_network" {
+  name = "external"
+}
+/**
+* Get flavor for our vms
+*/
+data "openstack_compute_flavor_v2" "flavor_small" {
+  name = "m1.small"
+}
+/**
+* Get debian image
+*/
+data "openstack_images_image_v2" "debian_image" {
+  name = "debian-buster"
+}
+
+
+/**
+* Create network INTERNAL
+*/
+resource "openstack_networking_network_v2" "internal_net" {
+  name           = "internal_net"
+  admin_state_up = "true"
+}
+/**
+* Create subnet INTERNAL SUBNET
+*/
+resource "openstack_networking_subnet_v2" "internal_subnet" {
+  name       = "internal_subnet"
+  network_id = openstack_networking_network_v2.internal_net.id
+  cidr       = "172.16.0.0/24"
+  ip_version = 4
+}
+
+/**
+* Create router INTERNAL ROUTER
+*/
+
+resource "openstack_networking_router_v2" "internal_router" {
+  name                = "my_router"
+  external_network_id = data.openstack_networking_network_v2.external_network.id
+  enable_snat         = true
+}
+
+resource "openstack_networking_router_interface_v2" "internal_router_int_interface" {
+  router_id = openstack_networking_router_v2.internal_router.id
+  subnet_id = openstack_networking_subnet_v2.internal_subnet.id
+}
+
+/**
 * Create port for vm_1
 */
-resource "openstack_networking_port_v2" "port_vm_1" {
-  name                  = "port_vm_1"
-  network_id            = "712dc2bd-46e4-4912-a912-26660544cca6"
+
+resource "openstack_networking_port_v2" "port_vm_1_internal" {
+  name                  = "port_vm_1_internal"
+  network_id            = openstack_networking_network_v2.internal_net.id
   admin_state_up        = "true"
   security_group_ids    = [openstack_networking_secgroup_v2.vm_external_secgroup.id]
   port_security_enabled = "true"
 
   fixed_ip {
-    subnet_id = "35525fef-80b3-4b15-a4fc-e4347bef5a7f"
+    subnet_id = openstack_networking_subnet_v2.internal_subnet.id
   }
 }
+
+
 /*
 * Create vm_1
 */
 resource "openstack_compute_instance_v2" "vm_1" {
   name            = "vm_1"
-  image_id        = "61e8a41a-a46e-4d28-814a-d305fca3e5a3"
-  flavor_id       = "2"
+  image_id        = data.openstack_images_image_v2.debian_image.id
+  flavor_id       = data.openstack_compute_flavor_v2.flavor_small.id
   key_pair        = openstack_compute_keypair_v2.ssh_keypair.name
   security_groups = []
   user_data       = data.template_cloudinit_config.cloudinit.rendered
+  network {
+    port = openstack_networking_port_v2.port_vm_1_internal.id
+  }
   metadata = {
     this = "that"
   }
+}
+/**
+* Create port for vm_2
+*/
+resource "openstack_networking_port_v2" "port_vm_2" {
+  name                  = "port_vm_2"
+  network_id            = openstack_networking_network_v2.internal_net.id
+  admin_state_up        = "true"
+  no_security_groups    = "true"
+  port_security_enabled = "false"
+
+  fixed_ip {
+    subnet_id = openstack_networking_subnet_v2.internal_subnet.id
+  }
+}
+/*
+* Create vm_2
+*/
+resource "openstack_compute_instance_v2" "vm_2" {
+  name            = "vm_2"
+  image_id        = data.openstack_images_image_v2.debian_image.id
+  flavor_id       = data.openstack_compute_flavor_v2.flavor_small.id
+  key_pair        = openstack_compute_keypair_v2.ssh_keypair.name
+  security_groups = []
   network {
-    port = openstack_networking_port_v2.port_vm_1.id
+    port = openstack_networking_port_v2.port_vm_2.id
+  }
+
+  metadata = {
+    this = "that"
   }
 }
 
 
+/**
+* Create Floating IP EXTERNAL
+*/
+
+resource "openstack_networking_floatingip_v2" "external_fip_vm_1" {
+  pool = data.openstack_networking_network_v2.external_network.name
+}
+
+resource "openstack_compute_floatingip_associate_v2" "external_fip_bind_vm_1" {
+  floating_ip = openstack_networking_floatingip_v2.external_fip_vm_1.address
+  instance_id = openstack_compute_instance_v2.vm_1.id
+  depends_on  = [openstack_networking_router_v2.internal_router]
+}
