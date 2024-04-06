@@ -17,3 +17,15 @@ variable "vm_user" {
   description = "User to create on the VM"
   default     = "debian"
 }
+
+variable "internal_network" {
+  type = object({
+    name = optional(string, "internal")
+    cidr = optional(string, "172.16.0.0/24")
+  })
+  default = {
+    name = "internal"
+    cidr = "172.16.0.0/24"
+  }
+
+}

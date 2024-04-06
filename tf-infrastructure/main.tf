@@ -92,37 +92,12 @@ data "openstack_images_image_v2" "debian_image" {
   name = "debian-buster"
 }
 
-
-/**
-* Create network INTERNAL
-*/
-resource "openstack_networking_network_v2" "internal_net" {
-  name           = "internal_net"
-  admin_state_up = "true"
-}
-/**
-* Create subnet INTERNAL SUBNET
-*/
-resource "openstack_networking_subnet_v2" "internal_subnet" {
-  name       = "internal_subnet"
-  network_id = openstack_networking_network_v2.internal_net.id
-  cidr       = "172.16.0.0/24"
-  ip_version = 4
-}
-
-/**
-* Create router INTERNAL ROUTER
-*/
-
-resource "openstack_networking_router_v2" "internal_router" {
-  name                = "my_router"
-  external_network_id = data.openstack_networking_network_v2.external_network.id
-  enable_snat         = true
-}
-
-resource "openstack_networking_router_interface_v2" "internal_router_int_interface" {
-  router_id = openstack_networking_router_v2.internal_router.id
-  subnet_id = openstack_networking_subnet_v2.internal_subnet.id
+module "internal_network" {
+  source                = "./modules/internal_network"
+  os_provider           = var.os_provider
+  external_network_name = data.openstack_networking_network_v2.external_network.name
+  internal_network_name = var.internal_network.name
+  internal_subnet_cidr  = var.internal_network.cidr
 }
 
 /**
@@ -131,13 +106,13 @@ resource "openstack_networking_router_interface_v2" "internal_router_int_interfa
 
 resource "openstack_networking_port_v2" "port_vm_1_internal" {
   name                  = "port_vm_1_internal"
-  network_id            = openstack_networking_network_v2.internal_net.id
+  network_id            = module.internal_network.internal_net.id
   admin_state_up        = "true"
   security_group_ids    = [openstack_networking_secgroup_v2.vm_external_secgroup.id]
   port_security_enabled = "true"
 
   fixed_ip {
-    subnet_id = openstack_networking_subnet_v2.internal_subnet.id
+    subnet_id = module.internal_network.internal_subnet.id
   }
 }
 
@@ -164,13 +139,13 @@ resource "openstack_compute_instance_v2" "vm_1" {
 */
 resource "openstack_networking_port_v2" "port_vm_2" {
   name                  = "port_vm_2"
-  network_id            = openstack_networking_network_v2.internal_net.id
+  network_id            = module.internal_network.internal_net.id
   admin_state_up        = "true"
   no_security_groups    = "true"
   port_security_enabled = "false"
 
   fixed_ip {
-    subnet_id = openstack_networking_subnet_v2.internal_subnet.id
+    subnet_id = module.internal_network.internal_subnet.id
   }
 }
 /*
@@ -203,5 +178,5 @@ resource "openstack_networking_floatingip_v2" "external_fip_vm_1" {
 resource "openstack_compute_floatingip_associate_v2" "external_fip_bind_vm_1" {
   floating_ip = openstack_networking_floatingip_v2.external_fip_vm_1.address
   instance_id = openstack_compute_instance_v2.vm_1.id
-  depends_on  = [openstack_networking_router_v2.internal_router]
+  depends_on  = [module.internal_network]
 }
