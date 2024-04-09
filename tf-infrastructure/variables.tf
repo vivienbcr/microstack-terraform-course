@@ -18,6 +18,15 @@ variable "vm_user" {
   default     = "debian"
 }
 
+variable "vms" {
+  type = list(object({
+    name   = string
+    flavor = string
+    image  = string
+  }))
+}
+
+
 variable "internal_network" {
   type = object({
     name = optional(string, "internal")

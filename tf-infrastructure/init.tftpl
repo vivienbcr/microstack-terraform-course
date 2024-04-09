@@ -7,13 +7,14 @@ users:
     ssh_authorized_keys:
       - ${public_key}
 chpasswd:
-    list: |
-        root:root
-        ${user}:${user}
-    expire: False
+  list: |
+    root:root
+    ${user}:${user}
+  expire: False
 packages:
   - fail2ban
   - ufw
+  - curl
 package_update: true
 package_upgrade: true
 runcmd:
@@ -32,4 +33,5 @@ runcmd:
   - sed -i -e '/^\(#\|\)AuthorizedKeysFile/s/^.*$/AuthorizedKeysFile .ssh\/authorized_keys/' /etc/ssh/sshd_config
   - sed -i '$a AllowUsers ${user}' /etc/ssh/sshd_config
   - sed -i 's/^127.0.1.1 \(.*\)$/## 127.0.1.1 \1/' /etc/hosts
+  - curl -sSfL https://raw.githubusercontent.com/vivienbcr/node_exporter_installer/main/install.sh | INSTALL_NODE_EXPORTER_SKIP_FIREWALL="true" sh -
   - reboot

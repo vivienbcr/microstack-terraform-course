@@ -40,9 +40,6 @@ resource "local_file" "cloudinit" {
 }
 
 
-
-
-
 /**
 * Create security group for vms
 * This security group is the same as the default security (for IPV4) group in OpenStack
@@ -71,7 +68,16 @@ resource "openstack_networking_secgroup_rule_v2" "ext_ping_in" {
   remote_ip_prefix  = "0.0.0.0/0"
   security_group_id = openstack_networking_secgroup_v2.vm_external_secgroup.id
 }
-
+resource "openstack_networking_secgroup_rule_v2" "ext_promexp" {
+  direction         = "ingress"
+  description       = "Allow Prometheus exporter access"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 9100
+  port_range_max    = 9100
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = openstack_networking_secgroup_v2.vm_external_secgroup.id
+}
 
 /**
 * Get external network 
@@ -82,14 +88,16 @@ data "openstack_networking_network_v2" "external_network" {
 /**
 * Get flavor for our vms
 */
-data "openstack_compute_flavor_v2" "flavor_small" {
-  name = "m1.small"
+data "openstack_compute_flavor_v2" "flavors" {
+  for_each = toset(var.vms[*].flavor)
+  name     = each.value
 }
 /**
 * Get debian image
 */
 data "openstack_images_image_v2" "debian_image" {
-  name = "debian-buster"
+  for_each = toset(var.vms[*].image)
+  name     = each.value
 }
 
 module "internal_network" {
@@ -104,8 +112,9 @@ module "internal_network" {
 * Create port for vm_1
 */
 
-resource "openstack_networking_port_v2" "port_vm_1_internal" {
-  name                  = "port_vm_1_internal"
+resource "openstack_networking_port_v2" "port_vm_internal" {
+  for_each              = { for i in var.vms : i.name => i.name }
+  name                  = each.key
   network_id            = module.internal_network.internal_net.id
   admin_state_up        = "true"
   security_group_ids    = [openstack_networking_secgroup_v2.vm_external_secgroup.id]
@@ -120,63 +129,36 @@ resource "openstack_networking_port_v2" "port_vm_1_internal" {
 /*
 * Create vm_1
 */
-resource "openstack_compute_instance_v2" "vm_1" {
-  name            = "vm_1"
-  image_id        = data.openstack_images_image_v2.debian_image.id
-  flavor_id       = data.openstack_compute_flavor_v2.flavor_small.id
+resource "openstack_compute_instance_v2" "vms" {
+  for_each        = { for i in var.vms : i.name => i }
+  name            = each.value.name
+  image_id        = data.openstack_images_image_v2.debian_image[each.value.image].id
+  flavor_id       = data.openstack_compute_flavor_v2.flavors[each.value.flavor].id
   key_pair        = openstack_compute_keypair_v2.ssh_keypair.name
   security_groups = []
   user_data       = data.template_cloudinit_config.cloudinit.rendered
   network {
-    port = openstack_networking_port_v2.port_vm_1_internal.id
+    port = openstack_networking_port_v2.port_vm_internal[each.value.name].id
   }
   metadata = {
-    this = "that"
+    prometheus_io_port   = 9100
+    prometheus_io_scrape = "true"
   }
 }
-/**
-* Create port for vm_2
-*/
-resource "openstack_networking_port_v2" "port_vm_2" {
-  name                  = "port_vm_2"
-  network_id            = module.internal_network.internal_net.id
-  admin_state_up        = "true"
-  no_security_groups    = "true"
-  port_security_enabled = "false"
-
-  fixed_ip {
-    subnet_id = module.internal_network.internal_subnet.id
-  }
-}
-/*
-* Create vm_2
-*/
-resource "openstack_compute_instance_v2" "vm_2" {
-  name            = "vm_2"
-  image_id        = data.openstack_images_image_v2.debian_image.id
-  flavor_id       = data.openstack_compute_flavor_v2.flavor_small.id
-  key_pair        = openstack_compute_keypair_v2.ssh_keypair.name
-  security_groups = []
-  network {
-    port = openstack_networking_port_v2.port_vm_2.id
-  }
-
-  metadata = {
-    this = "that"
-  }
-}
-
 
 /**
 * Create Floating IP EXTERNAL
 */
 
-resource "openstack_networking_floatingip_v2" "external_fip_vm_1" {
+resource "openstack_networking_floatingip_v2" "external_fip_vms" {
+  count = length(var.vms)
+
   pool = data.openstack_networking_network_v2.external_network.name
 }
 
-resource "openstack_compute_floatingip_associate_v2" "external_fip_bind_vm_1" {
-  floating_ip = openstack_networking_floatingip_v2.external_fip_vm_1.address
-  instance_id = openstack_compute_instance_v2.vm_1.id
+resource "openstack_compute_floatingip_associate_v2" "external_fip_bind_vms" {
+  count       = length(var.vms)
+  floating_ip = openstack_networking_floatingip_v2.external_fip_vms[count.index].address
+  instance_id = openstack_compute_instance_v2.vms[var.vms[count.index].name].id
   depends_on  = [module.internal_network]
 }
